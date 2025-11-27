@@ -1,0 +1,5 @@
+{
+  "name": "AI Motion Graphics Generator",
+  "description": "Generate professional Motion Graphics (MG) animations from text prompts using Google Gemini and Remotion.",
+  "requestFramePermissions": []
+}
