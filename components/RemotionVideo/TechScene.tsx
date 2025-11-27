@@ -1,13 +1,18 @@
 import React from 'react';
-import { useCurrentFrame, useVideoConfig, interpolate, spring, Easing } from 'remotion';
-import { SceneData, DiagramNode, DiagramEdge, DiagramAction } from '../../types';
+import { useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
+import { SceneData } from '../../types';
 
-// --- SVG PATHS ---
-const DB_PATH = "M 0 5 A 20 6 0 1 1 40 5 L 40 30 A 20 6 0 1 1 0 30 Z M 0 5 A 20 6 0 1 0 40 5"; // Simplified cylinder
-const LOCK_BODY_PATH = "M 10 15 H 30 V 30 H 10 Z";
-const LOCK_SHACKLE_PATH = "M 15 15 V 10 A 5 5 0 1 1 25 10 V 15";
-const SERVER_PATH = "M 2 2 H 38 V 38 H 2 Z M 5 10 H 35 M 5 20 H 35 M 5 30 H 35";
-const USER_PATH = "M 20 10 A 8 8 0 1 1 20 26 A 8 8 0 1 1 20 10 M 10 38 Q 20 28 30 38";
+// --- HIGH QUALITY SVG PATHS (Cyberpunk Aesthetic) ---
+const ICONS = {
+    database: "M 0 5 A 20 6 0 1 1 40 5 L 40 30 A 20 6 0 1 1 0 30 Z M 0 5 A 20 6 0 1 0 40 5",
+    server: "M 4 4 H 36 V 36 H 4 Z M 8 10 H 32 M 8 20 H 32 M 28 30 A 2 2 0 1 1 28 30.01",
+    client: "M 20 10 A 8 8 0 1 1 20 26 A 8 8 0 1 1 20 10 M 10 38 Q 20 28 30 38",
+    code: "M 10 20 L 2 10 L 10 0 M 30 0 L 38 10 L 30 20 M 18 25 L 22 -5", // Pseudo code brackets
+    lock: "M 10 15 H 30 V 30 H 10 Z M 15 15 V 10 A 5 5 0 1 1 25 10 V 15",
+    cloud: "M 10 25 Q 5 25 5 20 Q 5 10 15 10 Q 20 0 30 5 Q 40 0 45 10 Q 55 10 55 20 Q 55 25 50 25 Z",
+    queue: "M 5 10 H 35 M 5 20 H 35 M 5 30 H 35 M 40 10 L 35 15 L 40 20",
+    firewall: "M 4 4 H 36 V 36 H 4 Z M 4 4 L 36 36 M 36 4 L 4 36", // X box
+};
 
 interface TechSceneProps {
     data: SceneData;
@@ -19,256 +24,304 @@ export const TechScene: React.FC<TechSceneProps> = ({ data }) => {
     
     if (!data.diagramConfig) return null;
 
-    // SAFETY: Default to empty arrays if undefined to prevent "Cannot read properties of undefined (reading 'map')"
-    const nodes = data.diagramConfig.nodes || [];
-    const edges = data.diagramConfig.edges || [];
-    const actions = data.diagramConfig.actions || [];
+    const { nodes = [], edges = [], actions = [] } = data.diagramConfig;
     
-    const baseSize = Math.min(width, height) * 0.06; // Scaling factor based on screen size
+    // Config constants
+    const baseSize = Math.min(width, height) * 0.06;
+    const GRID_COLOR = 'rgba(255, 255, 255, 0.08)';
+    
+    // --- 3D TRANSFORM CONFIG ---
+    // This gives that cool "Tabletop" look from the user's example
+    const containerStyle: React.CSSProperties = {
+        flex: 1,
+        backgroundColor: data.backgroundColor || '#0f172a',
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+        overflow: 'hidden',
+        fontFamily: 'JetBrains Mono, monospace',
+        perspective: '1000px', // Crucial for 3D
+    };
 
-    // Helpers
+    const stageStyle: React.CSSProperties = {
+        position: 'absolute',
+        width: '100%',
+        height: '100%',
+        transformStyle: 'preserve-3d',
+        // Tilt the world back slightly
+        transform: 'rotateX(20deg) scale(0.9)', 
+    };
+
     const toPx = (pct: number, dim: number) => (pct / 100) * dim;
 
     return (
-        <div style={{
-            flex: 1,
-            backgroundColor: data.backgroundColor, // Use scene background
-            width: '100%',
-            height: '100%',
-            position: 'relative',
-            overflow: 'hidden',
-            fontFamily: 'JetBrains Mono, monospace'
-        }}>
-            {/* 3D Grid Background - Tech Aesthetic */}
+        <div style={containerStyle}>
+            {/* --- 1. MOVING GRID BACKGROUND --- */}
             <div style={{
                 position: 'absolute',
-                top: '-50%',
-                left: '-50%',
-                width: '200%',
-                height: '200%',
+                top: '-100%', left: '-100%', width: '300%', height: '300%',
                 backgroundImage: `
-                    linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), 
-                    linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)
+                    linear-gradient(${GRID_COLOR} 1px, transparent 1px), 
+                    linear-gradient(90deg, ${GRID_COLOR} 1px, transparent 1px)
                 `,
                 backgroundSize: '80px 80px',
-                transform: 'perspective(500px) rotateX(60deg) translateY(0px) translateZ(-100px)',
-                opacity: 0.4
+                transform: `rotateX(60deg) translateY(${frame % 80}px) translateZ(-200px)`, // Moving grid effect
+                opacity: 0.3,
             }} />
 
-            {/* Title Overlay */}
-            <div className="absolute top-10 left-10 z-50">
-                 <h2 className="text-3xl font-bold" style={{ color: data.textColor }}>{data.title}</h2>
-                 <p className="text-xl opacity-70" style={{ color: data.textColor }}>{data.subtitle}</p>
-            </div>
+            <div style={stageStyle}>
+                {/* --- 2. CONNECTIONS (EDGES) --- */}
+                <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible' }}>
+                    <defs>
+                         <filter id="glow-line" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur stdDeviation="4" result="coloredBlur" />
+                            <feMerge>
+                                <feMergeNode in="coloredBlur" />
+                                <feMergeNode in="SourceGraphic" />
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    {edges.map((edge, i) => {
+                        const from = nodes.find(n => n.id === edge.fromId);
+                        const to = nodes.find(n => n.id === edge.toId);
+                        if (!from || !to) return null;
 
-            {/* Connections */}
-            <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-                {edges.map((edge, i) => {
-                    const from = nodes.find(n => n.id === edge.fromId);
-                    const to = nodes.find(n => n.id === edge.toId);
-                    if (!from || !to) return null;
+                        const x1 = toPx(from.x, width);
+                        const y1 = toPx(from.y, height);
+                        const x2 = toPx(to.x, width);
+                        const y2 = toPx(to.y, height);
 
-                    const x1 = toPx(from.x, width);
-                    const y1 = toPx(from.y, height);
-                    const x2 = toPx(to.x, width);
-                    const y2 = toPx(to.y, height);
+                        // Reveal animation
+                        const progress = spring({ frame: frame - (i * 3), fps, config: { stiffness: 50 } });
+                        const opacity = interpolate(progress, [0, 1], [0, 0.4]);
 
-                    // Entrance animation for lines
-                    const lineProgress = spring({ frame: frame - (i * 5), fps, config: { damping: 200 } });
+                        return (
+                            <g key={`edge-${i}`} opacity={opacity}>
+                                {/* Base Line */}
+                                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={edge.color || data.textColor} strokeWidth="2" strokeOpacity="0.3" />
+                                {/* Label */}
+                                {edge.label && (
+                                    <text x={(x1+x2)/2} y={(y1+y2)/2 - 15} fill={data.textColor} textAnchor="middle" fontSize={20} opacity={0.7} style={{textShadow: '0 2px 4px black'}}>
+                                        {edge.label}
+                                    </text>
+                                )}
+                            </g>
+                        );
+                    })}
+                </svg>
+
+                {/* --- 3. NODES --- */}
+                {nodes.map((node, i) => {
+                    const nx = toPx(node.x, width);
+                    const ny = toPx(node.y, height);
+                    const nodeColor = node.color || '#3b82f6';
+
+                    // Entrance Spring
+                    const entrance = spring({ 
+                        frame: frame - (i * 5), 
+                        fps, 
+                        config: { stiffness: 100, damping: 12 } 
+                    });
+
+                    // Active Interaction Highlight
+                    const activeAction = actions.find(a => 
+                        (a.type === 'highlight' || a.type === 'pulse') && 
+                        a.targetId === node.id && 
+                        frame >= a.startDelay && 
+                        frame < a.startDelay + a.duration
+                    );
                     
+                    const isPulse = activeAction?.type === 'pulse';
+                    const pulseScale = isPulse ? Math.sin((frame - activeAction.startDelay) * 0.5) * 0.1 : 0;
+                    
+                    const scaleVal = interpolate(entrance, [0, 1], [0, 1]) + (activeAction ? 0.15 : 0) + pulseScale;
+
                     return (
-                        <g key={i} opacity={interpolate(lineProgress, [0, 1], [0, 0.5])}>
-                            <line 
-                                x1={x1} y1={y1} x2={x2} y2={y2} 
-                                stroke={edge.color || data.textColor} 
-                                strokeWidth="2" 
-                                strokeDasharray="5,5"
-                            />
-                            {edge.label && (
-                                <text x={(x1+x2)/2} y={(y1+y2)/2 - 10} fill={data.textColor} textAnchor="middle" fontSize={24}>
-                                    {edge.label}
-                                </text>
-                            )}
-                        </g>
+                        <div 
+                            key={node.id}
+                            style={{
+                                position: 'absolute',
+                                left: nx,
+                                top: ny,
+                                transform: `translate(-50%, -50%) scale(${scaleVal})`,
+                                zIndex: 10,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                transformStyle: 'preserve-3d', // Keep 3D context
+                            }}
+                        >
+                            {/* Icon Container with Glow */}
+                            <div style={{
+                                width: baseSize * 2.2,
+                                height: baseSize * 2.2,
+                                borderRadius: node.type === 'client' ? '50%' : '16px',
+                                background: 'rgba(15, 23, 42, 0.9)',
+                                border: `2px solid ${nodeColor}`,
+                                boxShadow: `0 0 ${activeAction ? '40px' : '10px'} ${nodeColor}`,
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                transition: 'box-shadow 0.3s',
+                                position: 'relative',
+                            }}>
+                                <svg width="50%" height="50%" viewBox="0 0 40 40" style={{overflow: 'visible'}}>
+                                    <path 
+                                        d={ICONS[node.type as keyof typeof ICONS] || ICONS.server} 
+                                        fill="none" 
+                                        stroke={nodeColor} 
+                                        strokeWidth="3" 
+                                        strokeLinecap="round" 
+                                        strokeLinejoin="round"
+                                        filter="drop-shadow(0 0 4px currentColor)"
+                                    />
+                                </svg>
+                                
+                                {/* Reflection Glint */}
+                                <div style={{
+                                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                                    borderRadius: 'inherit',
+                                    background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%)',
+                                    pointerEvents: 'none'
+                                }} />
+                            </div>
+
+                            {/* Node Label (Floating Billboard) */}
+                            <div style={{
+                                marginTop: '16px',
+                                background: 'rgba(0,0,0,0.7)',
+                                padding: '4px 12px',
+                                borderRadius: '4px',
+                                color: nodeColor,
+                                fontWeight: 700,
+                                fontSize: '18px',
+                                letterSpacing: '0.05em',
+                                whiteSpace: 'nowrap',
+                                textShadow: `0 0 10px ${nodeColor}`,
+                                border: `1px solid ${nodeColor}44`,
+                                transform: 'translateZ(20px)', // Float above
+                            }}>
+                                {node.label.toUpperCase()}
+                            </div>
+                        </div>
                     );
                 })}
-            </svg>
 
-            {/* Nodes */}
-            {nodes.map((node, i) => {
-                const nx = toPx(node.x, width);
-                const ny = toPx(node.y, height);
-                
-                // Pop in animation
-                const scale = spring({ 
-                    frame: frame - (i * 10), 
-                    fps, 
-                    config: { stiffness: 200, damping: 15 } 
-                });
+                {/* --- 4. PACKETS (ENERGY BOLTS) --- */}
+                {actions.map((action, i) => {
+                    if (action.type !== 'packet' || !action.fromId || !action.toId) return null;
+                    if (frame < action.startDelay) return null;
+                    if (frame > action.startDelay + action.duration) return null;
 
-                // Highlight animation check
-                const activeHighlight = actions.find(a => 
-                    a.type === 'highlight' && 
-                    a.targetId === node.id && 
-                    frame >= a.startDelay && 
-                    frame < a.startDelay + a.duration
-                );
-                
-                const highlightScale = activeHighlight ? 1.2 : 1.0;
-                const finalScale = interpolate(scale, [0, 1], [0, 1]) * highlightScale;
-
-                const nodeColor = node.color || data.textColor;
-
-                return (
-                    <div 
-                        key={node.id}
-                        style={{
-                            position: 'absolute',
-                            left: nx,
-                            top: ny,
-                            transform: `translate(-50%, -50%) scale(${finalScale})`,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            zIndex: 10
-                        }}
-                    >
-                        {/* Render Icon based on Type */}
-                        <div style={{
-                            width: baseSize * 2,
-                            height: baseSize * 2,
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            backgroundColor: '#1e293b',
-                            borderRadius: node.type === 'client' ? '50%' : '12px',
-                            border: `2px solid ${nodeColor}`,
-                            boxShadow: activeHighlight ? `0 0 30px ${nodeColor}` : `0 0 10px rgba(0,0,0,0.5)`,
-                            transition: 'box-shadow 0.2s',
-                            position: 'relative'
-                        }}>
-                             <svg width="60%" height="60%" viewBox="0 0 40 40" fill="none" stroke={nodeColor} strokeWidth="2">
-                                {node.type === 'database' && <path d={DB_PATH} />}
-                                {node.type === 'server' && <path d={SERVER_PATH} />}
-                                {node.type === 'client' && <path d={USER_PATH} />}
-                                {node.type === 'lock' && (
-                                    <>
-                                      <path d={LOCK_SHACKLE_PATH} />
-                                      <path d={LOCK_BODY_PATH} fill={nodeColor} stroke="none"/>
-                                    </>
-                                )}
-                                {node.type === 'code' && (
-                                    <text x="5" y="25" fontSize="30" fill={nodeColor} stroke="none">{`</>`}</text>
-                                )}
-                             </svg>
-                        </div>
-
-                        {/* Label */}
-                        <div style={{
-                            marginTop: 10,
-                            color: nodeColor,
-                            fontWeight: 'bold',
-                            fontSize: '24px',
-                            textShadow: '0 2px 4px rgba(0,0,0,0.8)',
-                            backgroundColor: 'rgba(0,0,0,0.6)',
-                            padding: '4px 8px',
-                            borderRadius: '4px'
-                        }}>
-                            {node.label}
-                        </div>
-                    </div>
-                );
-            })}
-
-            {/* Animations (Packets & Labels) */}
-            {actions.map((action, i) => {
-                if (frame < action.startDelay) return null;
-                if (frame > action.startDelay + action.duration && action.type === 'packet') return null; // Packets disappear
-
-                // --- PACKET FLOW ---
-                if (action.type === 'packet' && action.fromId && action.toId) {
                     const from = nodes.find(n => n.id === action.fromId);
                     const to = nodes.find(n => n.id === action.toId);
                     if (!from || !to) return null;
 
-                    const p = (frame - action.startDelay) / action.duration;
-                    const progress = Math.min(Math.max(p, 0), 1); // Clamp 0-1
+                    // Use Spring for movement instead of linear for better "feel"
+                    // We manually calculate progress 0-1 based on frame
+                    const rawProgress = (frame - action.startDelay) / action.duration;
+                    const progress = Math.min(Math.max(rawProgress, 0), 1);
 
-                    // Current Position
                     const startX = toPx(from.x, width);
                     const startY = toPx(from.y, height);
                     const endX = toPx(to.x, width);
                     const endY = toPx(to.y, height);
-                    
+
                     const curX = interpolate(progress, [0, 1], [startX, endX]);
                     const curY = interpolate(progress, [0, 1], [startY, endY]);
-
-                    const packetColor = action.color || '#ffffff';
+                    const packetColor = action.color || '#fff';
 
                     return (
                         <div
-                            key={`act-${i}`}
+                            key={`pkt-${i}`}
                             style={{
                                 position: 'absolute',
                                 left: curX,
                                 top: curY,
                                 transform: 'translate(-50%, -50%)',
-                                backgroundColor: packetColor,
-                                padding: '8px 16px',
-                                borderRadius: '20px',
-                                color: '#000',
-                                fontWeight: 'bold',
-                                fontSize: '18px',
                                 zIndex: 20,
-                                boxShadow: `0 0 15px ${packetColor}`,
-                                whiteSpace: 'nowrap'
                             }}
                         >
-                            {action.label || 'DATA'}
+                            {/* Glowing Orb */}
+                            <div style={{
+                                width: '16px', height: '16px',
+                                background: packetColor,
+                                borderRadius: '50%',
+                                boxShadow: `0 0 20px 5px ${packetColor}`,
+                            }} />
+                            
+                            {/* Label riding on packet */}
+                            {action.label && (
+                                <div style={{
+                                    position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)',
+                                    color: packetColor, fontWeight: 'bold', fontSize: '14px',
+                                    textShadow: '0 2px 4px black', whiteSpace: 'nowrap'
+                                }}>
+                                    {action.label}
+                                </div>
+                            )}
                         </div>
                     );
-                }
+                })}
+                
+                {/* --- 5. POPUP LABELS --- */}
+                {actions.map((action, i) => {
+                     if (action.type !== 'show_label' || !action.targetId) return null;
+                     if (frame < action.startDelay) return null;
 
-                // --- SHOW LABEL / POPUP ---
-                if (action.type === 'show_label' && action.targetId) {
-                    const target = nodes.find(n => n.id === action.targetId);
-                    if (!target) return null;
+                     const target = nodes.find(n => n.id === action.targetId);
+                     if (!target) return null;
 
-                    const tx = toPx(target.x, width);
-                    const ty = toPx(target.y, height);
+                     // Pop In
+                     const pop = spring({ frame: frame - action.startDelay, fps, config: { stiffness: 200 } });
+                     const tx = toPx(target.x, width);
+                     const ty = toPx(target.y, height);
 
-                    // Spring pop-up for label
-                    const labelPop = spring({
-                        frame: frame - action.startDelay,
-                        fps,
-                        config: { stiffness: 150 }
-                    });
-
-                    return (
-                        <div
-                             key={`act-${i}`}
-                             style={{
-                                 position: 'absolute',
-                                 left: tx + (baseSize),
-                                 top: ty - (baseSize),
-                                 transform: `scale(${labelPop})`,
-                                 backgroundColor: action.color || '#10B981',
-                                 color: '#fff',
-                                 padding: '6px 12px',
-                                 borderRadius: '6px',
-                                 fontSize: '20px',
-                                 fontWeight: 'bold',
-                                 zIndex: 30,
-                                 boxShadow: '0 4px 10px rgba(0,0,0,0.5)'
-                             }}
+                     return (
+                        <div 
+                            key={`lbl-${i}`}
+                            style={{
+                                position: 'absolute',
+                                left: tx, top: ty - baseSize * 2,
+                                transform: `translate(-50%, -50%) scale(${pop})`,
+                                zIndex: 50,
+                                background: action.color || '#10b981',
+                                color: '#000',
+                                padding: '8px 16px',
+                                borderRadius: '4px',
+                                fontWeight: '900',
+                                fontSize: '24px',
+                                boxShadow: `0 5px 20px rgba(0,0,0,0.5)`,
+                            }}
                         >
                             {action.label}
                         </div>
-                    );
-                }
-
-                return null;
-            })}
+                     );
+                })}
+            </div>
+            
+            {/* --- 6. TITLE OVERLAY (2D HUD) --- */}
+            <div style={{
+                position: 'absolute',
+                top: 40, left: 40,
+                zIndex: 100,
+                pointerEvents: 'none'
+            }}>
+                <h2 style={{
+                    fontSize: '40px', fontWeight: 800, color: data.textColor,
+                    textShadow: '0 4px 10px rgba(0,0,0,0.5)', margin: 0
+                }}>
+                    {data.title}
+                </h2>
+                <div style={{
+                    height: '4px', width: '60px', background: data.textColor, marginTop: '8px'
+                }} />
+                <p style={{
+                    fontSize: '24px', color: data.textColor, opacity: 0.8, marginTop: '8px'
+                }}>
+                    {data.subtitle}
+                </p>
+            </div>
         </div>
     );
 };

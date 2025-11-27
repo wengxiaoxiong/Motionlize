@@ -9,7 +9,7 @@ export interface SceneData {
   diagramConfig?: DiagramConfig;
 }
 
-export type NodeType = 'database' | 'server' | 'client' | 'code' | 'lock';
+export type NodeType = 'database' | 'server' | 'client' | 'code' | 'lock' | 'queue' | 'cloud' | 'firewall';
 
 export interface DiagramNode {
   id: string;
@@ -18,6 +18,7 @@ export interface DiagramNode {
   x: number; // 0-100 percentage
   y: number; // 0-100 percentage
   color?: string; // Hex override
+  icon?: string; // Optional specific icon hint
 }
 
 export interface DiagramEdge {
@@ -28,12 +29,12 @@ export interface DiagramEdge {
 }
 
 export interface DiagramAction {
-  type: 'packet' | 'highlight' | 'show_label';
+  type: 'packet' | 'highlight' | 'show_label' | 'pulse';
   startDelay: number; // Frames relative to scene start
   duration: number;
   fromId?: string; // For packet
   toId?: string;   // For packet
-  targetId?: string; // For highlight/show_label
+  targetId?: string; // For highlight/show_label/pulse
   label?: string; // Text for packet or label
   color?: string;
 }

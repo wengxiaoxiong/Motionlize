@@ -7,8 +7,12 @@ const nodeSchema: Schema = {
   type: Type.OBJECT,
   properties: {
     id: { type: Type.STRING },
-    type: { type: Type.STRING, enum: ['database', 'server', 'client', 'code', 'lock'] },
-    label: { type: Type.STRING },
+    type: { 
+      type: Type.STRING, 
+      enum: ['database', 'server', 'client', 'code', 'lock', 'queue', 'cloud', 'firewall'],
+      description: "Map real-world concepts to these tech analogies. e.g. A 'Pot' is a 'server'. A 'Fridge' is a 'database'."
+    },
+    label: { type: Type.STRING, description: "Display name (e.g. 'Rice Cooker')" },
     x: { type: Type.NUMBER, description: "X Position (0-100). 50 is center." },
     y: { type: Type.NUMBER, description: "Y Position (0-100). 50 is center." },
     color: { type: Type.STRING, nullable: true },
@@ -30,12 +34,12 @@ const edgeSchema: Schema = {
 const actionSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    type: { type: Type.STRING, enum: ['packet', 'highlight', 'show_label'] },
+    type: { type: Type.STRING, enum: ['packet', 'highlight', 'show_label', 'pulse'] },
     startDelay: { type: Type.INTEGER, description: "Frame delay from scene start (approx 30fps)" },
     duration: { type: Type.INTEGER, description: "Duration of animation in frames" },
     fromId: { type: Type.STRING, nullable: true, description: "Required for 'packet'" },
     toId: { type: Type.STRING, nullable: true, description: "Required for 'packet'" },
-    targetId: { type: Type.STRING, nullable: true, description: "Required for 'highlight' or 'show_label'" },
+    targetId: { type: Type.STRING, nullable: true, description: "Required for 'highlight', 'pulse' or 'show_label'" },
     label: { type: Type.STRING, nullable: true },
     color: { type: Type.STRING, nullable: true },
   },
@@ -45,34 +49,17 @@ const actionSchema: Schema = {
 const sceneSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    title: {
-      type: Type.STRING,
-      description: "VERY SHORT title (max 4 words).",
-    },
-    subtitle: {
-      type: Type.STRING,
-      description: "Concise subtitle (max 10 words). NO FLUFF.",
-    },
-    backgroundColor: {
-      type: Type.STRING,
-      description: "Hex color code for the background (e.g. #1e293b). Ensure high contrast.",
-    },
-    textColor: {
-      type: Type.STRING,
-      description: "Hex color code for the text (e.g. #ffffff).",
-    },
-    durationInFrames: {
-      type: Type.INTEGER,
-      description: "Duration of the scene in frames (assume 30fps). Min 60, Max 150.",
-    },
+    title: { type: Type.STRING },
+    subtitle: { type: Type.STRING },
+    backgroundColor: { type: Type.STRING },
+    textColor: { type: Type.STRING },
+    durationInFrames: { type: Type.INTEGER },
     type: {
       type: Type.STRING,
       enum: ['intro', 'bullet_point', 'quote', 'outro', 'tech_diagram'],
-      description: "The visual style template. Use 'tech_diagram' for explaining technical concepts with nodes/servers.",
     },
     diagramConfig: {
       type: Type.OBJECT,
-      description: "Configuration for 'tech_diagram' type scenes. Required if type is tech_diagram.",
       properties: {
         nodes: { type: Type.ARRAY, items: nodeSchema },
         edges: { type: Type.ARRAY, items: edgeSchema },
@@ -86,45 +73,62 @@ const sceneSchema: Schema = {
 const responseSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    suggestedMusicMood: {
-      type: Type.STRING,
-      description: "A short description of the music mood suitable for this video.",
-    },
-    scenes: {
-      type: Type.ARRAY,
-      items: sceneSchema,
-    },
+    suggestedMusicMood: { type: Type.STRING },
+    scenes: { type: Type.ARRAY, items: sceneSchema },
   },
   required: ["scenes", "suggestedMusicMood"],
 };
 
 export const generateVideoScript = async (topic: string, durationSeconds: number = 30): Promise<GeminiResponse> => {
   const model = "gemini-2.5-flash";
-  
-  // Calculate approx number of scenes based on duration (avg 4-5 seconds per scene + transitions)
-  const targetScenes = Math.max(3, Math.floor(durationSeconds / 5));
+  const targetScenes = Math.max(3, Math.floor(durationSeconds / 6)); // Longer scenes for tech diagrams
 
   const prompt = `
-    You are a professional Motion Graphics Director specializing in technical explainers.
-    Create a structured video script for a video about: "${topic}".
-    
-    CONSTRAINTS:
-    1. Total Duration Target: ~${durationSeconds} seconds.
-    2. Scene Count Target: ~${targetScenes} scenes.
-    3. STYLE: Minimalist, Technical, Cyberpunk.
-    4. TEXT: EXTREMELY CONCISE. No fluff. No long sentences. Use keywords.
-       - BAD: "In this scene we will explore how the database connects to the server."
-       - GOOD: "Database Connection" / "Handshake Protocol"
-    
-    CRITICAL: For technical explanations (how it works, architecture, flow), you MUST use the 'tech_diagram' scene type.
-    
-    When defining a 'tech_diagram':
-    1. Define 'nodes' (Servers, Databases, Users) with x/y coordinates (0-100 scale). 50,50 is center.
-    2. Define 'edges' connecting them.
-    3. Define 'actions' to animate the flow. 
-    
-    Ensure the color palette is modern (dark mode technical aesthetic).
-  `;
+# ROLE: High-End Motion Graphics Director (Cyberpunk / Technical Style)
+
+You are designing a high-tech, animated system diagram video. Your goal is to visualize ANY topic (even cooking or daily life) as a sophisticated **Distributed System Architecture**.
+
+## CORE VISUAL METAPHOR
+Treat every topic as a computing system.
+- **Cooking Curry** -> A Data Processing Pipeline. Ingredients are Data Packets. The Pot is a Server. The Recipe is Code.
+- **Logistics** -> Network Routing Topology.
+- **Finance** -> Transactional Database Locking.
+
+## STRICT SCENE REQUIREMENTS
+
+1.  **VISUAL STYLE**: 
+    - Dark mode is MANDATORY. Backgrounds: #0B0F19, #111827.
+    - Accents: Neon Cyan (#06b6d4), Neon Purple (#8b5cf6), Neon Green (#10b981).
+    - Text: High contrast white/slate.
+
+2.  **TECH_DIAGRAM RULES (CRITICAL)**:
+    - **NEVER** return empty 'edges' or 'actions'. A diagram without movement is broken.
+    - **NODES**: Create 3-6 nodes. Map them to tech types:
+        - Storage/Containers -> 'database'
+        - Processors/Workers -> 'server'
+        - Users/Consumers -> 'client'
+        - Rules/Recipes -> 'code'
+        - Security/Gatekeepers -> 'lock' or 'firewall'
+    - **EDGES**: Connect the nodes logically. 
+        - Example: Client -> connects to -> Server. Server -> connects to -> Database.
+    - **ACTIONS**: Orchestrate a "Data Flow".
+        - Phase 1 (Frame 10-30): 'highlight' nodes to introduce them.
+        - Phase 2 (Frame 30-80): 'packet' flow. Packets MUST travel along edges (fromId -> toId).
+        - Phase 3 (Frame 80-120): 'pulse' or 'show_label' to show the result (e.g., "Done", "200 OK").
+
+## TOPIC: "${topic}"
+Target Duration: ${durationSeconds}s (~${targetScenes} scenes)
+
+## OUTPUT JSON STRUCTURE
+Generate a JSON response matching the schema. 
+If the user asks for "Curry", do NOT just list ingredients. SHOW THE PROCESS.
+- Scene 1: Intro
+- Scene 2: "Ingredient Acquisition" (Client sends request to Fridge DB)
+- Scene 3: "Processing Pipeline" (Server [Pot] processes Data [Meat/Veg] with Code [Heat])
+- Scene 4: Outro
+
+BE CREATIVE. BE TECHNICAL. MAKE IT MOVE.
+`;
 
   try {
     const result = await genAI.models.generateContent({
@@ -133,27 +137,22 @@ export const generateVideoScript = async (topic: string, durationSeconds: number
       config: {
         responseMimeType: "application/json",
         responseSchema: responseSchema,
-        temperature: 0.7,
+        temperature: 0.7, // Creativity allowed for metaphors
       },
     });
 
     const text = result.text;
-    if (!text) {
-      throw new Error("No response from Gemini");
-    }
+    if (!text) throw new Error("No response from Gemini");
 
     const data = JSON.parse(text) as GeminiResponse;
+    
+    // Post-processing to ensure stability
     data.scenes = data.scenes.map(scene => {
-      // Fallback: if tech_diagram is missing config, convert to bullet_point
       if (scene.type === 'tech_diagram') {
-         if (!scene.diagramConfig) {
-             scene.type = 'bullet_point';
-         } else {
-             // Ensure arrays exist
-             scene.diagramConfig.nodes = scene.diagramConfig.nodes || [];
-             scene.diagramConfig.edges = scene.diagramConfig.edges || [];
-             scene.diagramConfig.actions = scene.diagramConfig.actions || [];
-         }
+         scene.diagramConfig = scene.diagramConfig || { nodes: [], edges: [], actions: [] };
+         scene.diagramConfig.nodes = scene.diagramConfig.nodes || [];
+         scene.diagramConfig.edges = scene.diagramConfig.edges || [];
+         scene.diagramConfig.actions = scene.diagramConfig.actions || [];
       }
       return scene;
     });
